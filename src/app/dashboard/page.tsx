@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/Card";
 import { TaskItem } from "@/components/TaskItem";
 import { CheckCircle2, LogOut, Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizePhone } from "@/lib/phone";
 
 type Task = {
   id: string;
@@ -158,17 +159,18 @@ export default function DashboardPage() {
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Basic India numbering validation
-    const phoneRegex = /^\+91\d{10}$/;
-    if (!phoneRegex.test(phoneInput.replace(/\s/g, ''))) {
-      setPhoneError("Please enter a valid phone number starting with +91");
+    const formattedPhone = normalizePhone(phoneInput);
+    
+    // Valid normalized phone check
+    const phoneRegex = /^\+\d{10,15}$/;
+    if (!phoneRegex.test(formattedPhone)) {
+      setPhoneError("Please enter a valid phone number (e.g. 9876543210)");
       return;
     }
     
     setIsSavingPhone(true);
     setPhoneError("");
     try {
-      const formattedPhone = phoneInput.replace(/\s/g, '');
       const { error } = await supabase
         .from('profiles')
         .update({ phone: formattedPhone })

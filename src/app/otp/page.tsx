@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizePhone } from "@/lib/phone";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/Card";
@@ -18,7 +19,8 @@ export default function OTPPage() {
   const router = useRouter();
 
   const handleSendOTP = async () => {
-    if (!phone.replace(/\s/g, '')) {
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (!digitsOnly) {
       setError("Please enter a phone number");
       return;
     }
@@ -26,8 +28,7 @@ export default function OTPPage() {
     setError("");
     setIsLoading(true);
     
-    const cleanPhone = phone.replace(/\s/g, '');
-    const formattedPhone = cleanPhone.startsWith("+") ? cleanPhone : `+91${cleanPhone}`;
+    const formattedPhone = normalizePhone(phone);
 
     try {
       const { error: authError } = await supabase.auth.signInWithOtp({
@@ -53,8 +54,7 @@ export default function OTPPage() {
     setError("");
     setIsLoading(true);
     
-    const cleanPhone = phone.replace(/\s/g, '');
-    const formattedPhone = cleanPhone.startsWith("+") ? cleanPhone : `+91${cleanPhone}`;
+    const formattedPhone = normalizePhone(phone);
 
     try {
       const { error: verifyError } = await supabase.auth.verifyOtp({
