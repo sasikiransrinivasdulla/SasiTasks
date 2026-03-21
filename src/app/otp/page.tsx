@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/Card";
@@ -10,23 +12,65 @@ import { Smartphone, ShieldCheck, CheckCircle2, ArrowLeft } from "lucide-react";
 export default function OTPPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const router = useRouter();
 
-  const handleSendOTP = () => {
+  const handleSendOTP = async () => {
+    if (!phone.replace(/\s/g, '')) {
+      setError("Please enter a phone number");
+      return;
+    }
+    
+    setError("");
     setIsLoading(true);
-    // Simulate network request
-    setTimeout(() => {
-      setIsLoading(false);
+    
+    const cleanPhone = phone.replace(/\s/g, '');
+    const formattedPhone = cleanPhone.startsWith("+") ? cleanPhone : `+91${cleanPhone}`;
+
+    try {
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone
+      });
+
+      if (authError) throw authError;
+      
       setStep(2);
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || "Failed to send OTP");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
+    if (!otp || otp.length < 6) {
+      setError("Please enter the complete 6-digit code");
+      return;
+    }
+
+    setError("");
     setIsLoading(true);
-    // Simulate verification
-    setTimeout(() => {
+    
+    const cleanPhone = phone.replace(/\s/g, '');
+    const formattedPhone = cleanPhone.startsWith("+") ? cleanPhone : `+91${cleanPhone}`;
+
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone: formattedPhone,
+        token: otp,
+        type: 'sms'
+      });
+
+      if (verifyError) throw verifyError;
+      
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP code");
+    } finally {
       setIsLoading(false);
-      window.location.href = "/dashboard";
-    }, 1000);
+    }
   };
 
   return (
@@ -65,13 +109,22 @@ export default function OTPPage() {
           </CardHeader>
           
           <CardContent className="space-y-6">
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive text-center animate-in fade-in zoom-in-95">
+                {error}
+              </div>
+            )}
+            
             {step === 1 ? (
               <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                 <Input
                   label="Phone Number"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+91 9876543210"
                   type="tel"
                   icon={<Smartphone className="h-4 w-4" />}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
                 />
                 <Button 
                   className="w-full font-semibold" 
@@ -86,10 +139,13 @@ export default function OTPPage() {
               <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                 <Input
                   label="Secure Code"
-                  placeholder="000 000"
+                  placeholder="000000"
                   type="text"
                   maxLength={6}
                   className="text-center text-2xl tracking-[0.5em] font-mono h-14"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                 />
                 <Button 
                   className="w-full font-semibold" 
@@ -101,8 +157,8 @@ export default function OTPPage() {
                 </Button>
                 <div className="text-center">
                   <button 
-                    onClick={() => setStep(1)} 
-                    className="text-sm text-primary hover:underline underline-offset-4"
+                    onClick={() => { setStep(1); setError(""); setOtp(""); }} 
+                    className="text-sm text-primary hover:underline underline-offset-4 cursor-pointer transition-colors duration-200"
                   >
                     Didn't receive a code? Resend
                   </button>
