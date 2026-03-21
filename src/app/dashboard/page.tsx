@@ -12,8 +12,9 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Task = {
   id: string;
-  text: string;
-  completed: boolean;
+  user_id: string;
+  title: string;
+  is_completed: boolean;
 };
 
 export default function DashboardPage() {
@@ -23,6 +24,12 @@ export default function DashboardPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Phone Modal States
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("+91");
+  const [phoneError, setPhoneError] = useState("");
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -35,7 +42,9 @@ export default function DashboardPage() {
   }, []);
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [newTaskText, setNewTaskText] = useState("");
+  const [isAddingTask, setIsAddingTask] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -82,6 +91,21 @@ export default function DashboardPage() {
           .single();
 
         setProfile(profileData);
+        if (profileData && !profileData.phone) {
+          setShowPhoneModal(true);
+        }
+        
+        // Fetch user's tasks
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('id', { ascending: false });
+          
+        if (!tasksError && tasksData) {
+          setTasks(tasksData);
+        }
+        setIsLoadingTasks(false);
         setUser(user);
         setIsLoadingAuth(false);
       }
@@ -107,33 +131,94 @@ export default function DashboardPage() {
   const displayName = profile?.display_name || user?.user_metadata?.full_name || user?.email || "User";
   const initial = displayName.charAt(0).toUpperCase();
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskText.trim()) return;
+    if (!newTaskText.trim() || !user || isAddingTask) return;
     
-    const newTask: Task = {
-      id: Date.now().toString(),
-      text: newTaskText,
-      completed: false,
-    };
-    
-    setTasks([newTask, ...tasks]);
-    setNewTaskText("");
+    setIsAddingTask(true);
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: user.id,
+        title: newTaskText.trim(),
+        is_completed: false
+      })
+      .select()
+      .single();
+      
+    if (!error && data) {
+      setTasks([data, ...tasks]);
+      setNewTaskText("");
+    } else {
+      console.error(error);
+    }
+    setIsAddingTask(false);
   };
 
-  const handleToggleTask = (id: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+  const handleSavePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Basic India numbering validation
+    const phoneRegex = /^\+91\d{10}$/;
+    if (!phoneRegex.test(phoneInput.replace(/\s/g, ''))) {
+      setPhoneError("Please enter a valid phone number starting with +91");
+      return;
+    }
+    
+    setIsSavingPhone(true);
+    setPhoneError("");
+    try {
+      const formattedPhone = phoneInput.replace(/\s/g, '');
+      const { error } = await supabase
+        .from('profiles')
+        .update({ phone: formattedPhone })
+        .eq('id', user.id);
+        
+      if (error) throw error;
+      
+      setProfile({ ...profile, phone: formattedPhone });
+      setShowPhoneModal(false);
+    } catch (err: any) {
+      setPhoneError(err.message || "Failed to save phone number");
+    } finally {
+      setIsSavingPhone(false);
+    }
   };
 
-  const handleDeleteTask = (id: string) => {
+  const handleToggleTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    
+    // Optimistic UI update
+    setTasks(tasks.map(t => t.id === id ? { ...t, is_completed: !t.is_completed } : t));
+    
+    const { error } = await supabase
+      .from('tasks')
+      .update({ is_completed: !task.is_completed })
+      .eq('id', id);
+      
+    if (error) {
+      console.error(error);
+      setTasks(tasks.map(t => t.id === id ? { ...t, is_completed: task.is_completed } : t));
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    const previousTasks = [...tasks];
     setTasks(tasks.filter((task) => task.id !== id));
+    
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', id);
+      
+    if (error) {
+      console.error(error);
+      setTasks(previousTasks);
+    }
   };
 
-  const completedCount = tasks.filter((t) => t.completed).length;
+  const completedCount = tasks.filter((t) => t.is_completed).length;
   const progress = tasks.length === 0 ? 0 : Math.round((completedCount / tasks.length) * 100);
 
   return (
@@ -242,7 +327,7 @@ export default function DashboardPage() {
                 className="pl-10 h-12 text-base shadow-sm bg-background border-border/80 focus-visible:ring-primary/30 rounded-xl"
               />
             </div>
-            <Button type="submit" size="default" className="h-12 px-6 rounded-xl shadow-sm text-base font-medium">
+            <Button type="submit" size="default" className="h-12 px-6 rounded-xl shadow-sm text-base font-medium" isLoading={isAddingTask} disabled={isAddingTask}>
               Add Task
             </Button>
           </form>
@@ -268,7 +353,12 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {tasks.length === 0 ? (
+            {isLoadingTasks ? (
+              <div className="py-12 flex flex-col justify-center items-center">
+                <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin mb-4"></div>
+                <p className="text-muted-foreground text-sm">Loading tasks...</p>
+              </div>
+            ) : tasks.length === 0 ? (
               <div className="py-8 sm:py-12 text-center flex flex-col items-center justify-center animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <Card className="max-w-md w-full border-dashed border-2 border-border/60 bg-card/30 shadow-none">
                   <CardContent className="pt-8 pb-8 flex flex-col items-center">
@@ -301,7 +391,7 @@ export default function DashboardPage() {
                 {tasks.map((task) => (
                   <TaskItem
                     key={task.id}
-                    task={task}
+                    task={{ id: task.id, text: task.title, completed: task.is_completed }}
                     onToggle={handleToggleTask}
                     onDelete={handleDeleteTask}
                     className="shadow-sm bg-background/50 hover:bg-card hover:-translate-y-0.5"
@@ -312,6 +402,37 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Phone Number Collection Modal */}
+      {showPhoneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="max-w-md w-[90%] border-border/50 shadow-2xl animate-in zoom-in-95 fade-in duration-300">
+            <div className="text-center pb-4 pt-6 px-6">
+              <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                <span className="text-xl">📱</span>
+              </div>
+              <h2 className="text-2xl font-bold text-foreground">Complete your profile</h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                Please enter your phone number to continue. This ensures your account is secure and ready for OTP login.
+              </p>
+            </div>
+            <CardContent className="px-6 pb-6">
+              <form onSubmit={handleSavePhone} className="space-y-4">
+                <Input
+                  label="Phone Number"
+                  placeholder="+91 9876543210"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  error={phoneError}
+                />
+                <Button type="submit" className="w-full font-semibold" isLoading={isSavingPhone}>
+                  Save & Continue
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
