@@ -29,6 +29,7 @@ export default function OTPPage() {
     setIsLoading(true);
     
     const formattedPhone = normalizePhone(phone);
+    console.log("Searching for phone:", formattedPhone);
 
     try {
       const { error: authError } = await supabase.auth.signInWithOtp({
@@ -101,9 +102,9 @@ export default function OTPPage() {
             <CardTitle className="text-2xl font-bold">
               {step === 1 ? "Login with Request OTP" : "Verify Your Number"}
             </CardTitle>
-            <CardDescription className="text-base">
+            <CardDescription className="text-base text-muted-foreground/90">
               {step === 1 
-                ? "Enter your phone number to receive a secure code" 
+                ? "Enter your 10-digit phone number (without +91)" 
                 : "Enter the 6-digit code sent to your device"}
             </CardDescription>
           </CardHeader>
@@ -119,7 +120,7 @@ export default function OTPPage() {
               <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                 <Input
                   label="Phone Number"
-                  placeholder="+91 9876543210"
+                  placeholder="9876543210"
                   type="tel"
                   icon={<Smartphone className="h-4 w-4" />}
                   value={phone}

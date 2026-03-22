@@ -2,14 +2,130 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/Card";
-import { CheckCircle2, Mail, Lock, Smartphone } from "lucide-react";
+import { CheckCircle2, Mail, Lock, Smartphone, ArrowRight, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizePhone } from "@/lib/phone";
 
 export default function LoginPage() {
+  const router = useRouter();
+  
+  type AuthMode = 'initial' | 'password' | 'otp_only' | 'mfa_password' | 'mfa_otp';
+  const [authMode, setAuthMode] = useState<AuthMode>('initial');
+  
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+
+  // Pre-fetch logic
+  const handleContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!identifier) {
+      setError("Please enter your email or phone number.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    const isEmail = identifier.includes('@');
+    const queryCol = isEmail ? 'email' : 'phone';
+    const queryVal = isEmail ? identifier.trim() : normalizePhone(identifier);
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('otp_enabled, mfa_enabled, phone')
+        .eq(queryCol, queryVal)
+        .maybeSingle();
+
+      if (profile?.otp_enabled) {
+        // Option A: Passwordless OTP Fast-pass
+        const otpPayload = isEmail ? { email: queryVal } : { phone: queryVal };
+        const { error: otpError } = await supabase.auth.signInWithOtp(otpPayload);
+        if (otpError) throw otpError;
+        setAuthMode('otp_only');
+      } else if (profile?.mfa_enabled) {
+        // Option B: MFA Custom Dual-Gateway
+        setAuthMode('mfa_password');
+      } else {
+        // Option C: Standard Legacy Auth
+        setAuthMode('password');
+      }
+    } catch (err: any) {
+      setError(err.message || "Something went wrong checking your profile.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password) { setError("Password mapped as required."); return; }
+    
+    setIsLoading(true);
+    setError("");
+
+    const isEmail = identifier.includes('@');
+    const queryVal = isEmail ? identifier.trim() : normalizePhone(identifier);
+
+    const pwPayload = isEmail ? { email: queryVal, password } : { phone: queryVal, password };
+    const { error: signInError } = await supabase.auth.signInWithPassword(pwPayload);
+
+    if (signInError) {
+      setError(signInError.message);
+      setIsLoading(false);
+      return;
+    }
+
+    if (authMode === 'mfa_password') {
+       // Stop the redirect and demand OTP step
+       const otpPayload = isEmail ? { email: queryVal } : { phone: queryVal };
+       const { error: otpError } = await supabase.auth.signInWithOtp(otpPayload);
+       if (otpError) {
+          setError(otpError.message);
+          setIsLoading(false);
+          return;
+       }
+       setAuthMode('mfa_otp');
+       setIsLoading(false);
+    } else {
+       // Standard flow
+       router.push("/dashboard");
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp || otp.length < 6) { setError("Valid 6-digit code required."); return; }
+    
+    setIsLoading(true);
+    setError("");
+
+    const isEmail = identifier.includes('@');
+    const queryVal = isEmail ? identifier.trim() : normalizePhone(identifier);
+
+    const verifyPayload = isEmail 
+      ? { email: queryVal, token: otp, type: 'email' as const }
+      : { phone: queryVal, token: otp, type: 'sms' as const };
+
+    const { error: verifyError } = await supabase.auth.verifyOtp(verifyPayload);
+
+    if (verifyError) {
+      setError(verifyError.message);
+      setIsLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -49,39 +165,86 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <Input
-                label="Email or Phone"
-                placeholder="m@example.com or +1234567890"
-                type="text"
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect="off"
-                icon={<Mail className="h-4 w-4" />}
-              />
-              <Input
-                label="Password"
-                placeholder="••••••••"
-                type="password"
-                autoComplete="current-password"
-                icon={<Lock className="h-4 w-4" />}
-              />
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-all duration-200">
-                <input type="checkbox" className="rounded border-border bg-background text-primary focus:ring-primary/20 transition-colors accent-primary h-4 w-4 cursor-pointer" />
-                <span className="text-muted-foreground group-hover:text-foreground transition-colors">Remember me</span>
-              </label>
-              <Link href="#" className="text-primary hover:underline underline-offset-4 transition-all duration-200 cursor-pointer hover:opacity-80">
-                Forgot password?
-              </Link>
-            </div>
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive text-center animate-in fade-in zoom-in-95">
+                {error}
+              </div>
+            )}
             
-            <Link href="/dashboard" className="block w-full pt-2">
-              <Button className="w-full font-semibold" size="lg">
-                Login
-              </Button>
-            </Link>
+            {authMode === 'initial' && (
+              <form onSubmit={handleContinue} className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <Input
+                  label="Email or Phone"
+                  placeholder="name@example.com or 9876543210"
+                  type="text"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  autoCorrect="off"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  icon={<Mail className="h-4 w-4" />}
+                />
+                <Button type="submit" className="w-full font-semibold" size="lg" isLoading={isLoading}>
+                  Continue <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
+            )}
+
+            {(authMode === 'password' || authMode === 'mfa_password') && (
+              <form onSubmit={handleVerifyPassword} className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                <div className="p-3 bg-secondary/30 border border-border/50 rounded-lg flex items-center justify-between mb-2">
+                   <div className="truncate pr-4 text-sm text-foreground/80 font-medium">{identifier}</div>
+                   <button type="button" onClick={() => setAuthMode('initial')} className="text-xs text-primary hover:underline whitespace-nowrap">Edit</button>
+                </div>
+                <Input
+                  label="Password"
+                  placeholder="••••••••"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  icon={<Lock className="h-4 w-4" />}
+                />
+                
+                <div className="flex items-center justify-between text-sm pb-2">
+                  <label className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-all duration-200">
+                    <input type="checkbox" className="rounded border-border bg-background text-primary focus:ring-primary/20 transition-colors accent-primary h-4 w-4 cursor-pointer" />
+                    <span className="text-muted-foreground group-hover:text-foreground transition-colors">Remember me</span>
+                  </label>
+                  <Link href="#" className="text-primary hover:underline underline-offset-4 transition-all duration-200 cursor-pointer hover:opacity-80">
+                    Forgot password?
+                  </Link>
+                </div>
+                
+                <Button type="submit" className="w-full font-semibold" size="lg" isLoading={isLoading}>
+                  {authMode === 'mfa_password' ? 'Verify Password' : 'Login'}
+                </Button>
+              </form>
+            )}
+
+            {(authMode === 'otp_only' || authMode === 'mfa_otp') && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center gap-2 text-primary mb-2 text-sm text-center">
+                   <ShieldCheck className="h-5 w-5 shrink-0" />
+                   <span>Enter the robust 6-digit verification code sent to {identifier.includes('@') ? 'your email' : 'your device'}.</span>
+                </div>
+                <Input
+                  label="Security Code"
+                  placeholder="000000"
+                  type="text"
+                  maxLength={6}
+                  className="text-center text-2xl tracking-[0.5em] font-mono h-14"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                />
+                <Button type="submit" className="w-full font-semibold" size="lg" isLoading={isLoading}>
+                  {authMode === 'mfa_otp' ? 'Complete MFA & Login' : 'Login Securely'}
+                </Button>
+                <div className="text-center pt-2">
+                   <button type="button" onClick={() => setAuthMode('initial')} className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors">Start over</button>
+                </div>
+              </form>
+            )}
             
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
@@ -97,7 +260,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Button 
                 variant="outline" 
-                className="w-full text-foreground hover:bg-secondary border-border/50"
+                className="w-full bg-white text-[#3c4043] border border-gray-300 hover:bg-[#f8f9fa] shadow-sm font-medium transition-all"
                 onClick={handleGoogleLogin}
                 isLoading={isLoadingGoogle}
                 type="button"
