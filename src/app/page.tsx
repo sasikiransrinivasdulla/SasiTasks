@@ -10,17 +10,9 @@ export default function LandingPage() {
           <CheckCircle2 className="h-6 w-6 text-primary" />
           <span className="ml-2 text-lg font-bold">Sasi Tasks</span>
         </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Link className="text-sm font-medium hover:text-primary transition-all duration-200 cursor-pointer hover:scale-105" href="/login">
-            Features
-          </Link>
-          <Link className="text-sm font-medium hover:text-primary transition-all duration-200 cursor-pointer hover:scale-105" href="/login">
-            Pricing
-          </Link>
-          <Link className="text-sm font-medium hover:text-primary transition-all duration-200 cursor-pointer hover:scale-105" href="/login">
-            About
-          </Link>
-        </nav>
+        <div className="ml-auto">
+          {/* Dashboard access button could go here eventually, leaving it blank for a clean nav */}
+        </div>
       </header>
       <main className="flex-1 flex flex-col items-center justify-center text-center px-4 py-8 sm:px-6 lg:px-8 bg-gradient-to-b from-background via-background to-secondary/10">
         <div className="max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
