@@ -19,6 +19,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -153,6 +154,8 @@ export default function SignupPage() {
                     id="terms" 
                     className="mt-1 flex-shrink-0 rounded border-border bg-background text-primary focus:ring-primary/20 accent-primary h-4 w-4 cursor-pointer" 
                     required
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
                   />
                   <label htmlFor="terms" className="text-muted-foreground leading-snug cursor-pointer group-hover:text-foreground transition-colors hover:opacity-80">
                     I agree to the{" "}
@@ -164,7 +167,7 @@ export default function SignupPage() {
               </div>
               
               <div className="pt-4">
-                <Button type="submit" className="w-full font-semibold" size="lg" isLoading={isLoading}>
+                <Button type="submit" className="w-full font-semibold" size="lg" isLoading={isLoading} disabled={!agreedToTerms}>
                   Create Account
                 </Button>
               </div>

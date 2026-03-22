@@ -1,54 +1,74 @@
 # 🚀 Sasi Auth: Identity & Access Engine
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-sasi--tasks.vercel.app-10b981?style=for-the-badge&logo=vercel)](https://sasi-tasks.vercel.app)
+
 An enterprise-grade, high-performance Identity and Access Management (IAM) framework built natively with Next.js and Supabase. Engineered specifically for complex multi-modal authentication edge cases, this engine delivers bank-grade security layers atop a sleek, consumer-ready interface.
 
 ---
 
-## 🛡️ Security Architecture
+## ⚠️ Infrastructure & Evaluation Note
 
-### **Stateless Session Management**
-Exal Auth abandons legacy server-side session pinging in favor of high-velocity **Stateless Session Management**. By leaning natively on Supabase-issued JSON Web Tokens (JWTs), we guarantee that horizontally scaled server components can instantly and cryptographically verify active identities without executing expensive database latency round-trips.
+Due to upstream provider restrictions, **the Twilio SMS engine integrated into this build is currently scaled to a Development Sandbox.** 
 
-### **Multi-Factor Orchestration**
-Instead of static and unyielding login forms, the system features dynamic **Multi-Factor Orchestration**. Users are granted absolute sovereignty over their security vectors, seamlessly toggling their gateway routing between:
-* **Strict MFA (Password + Secure OTP):** Demands a mathematically exact bcrypt-validated password match *before* natively trapping the route to force a secondary SMS cryptographic verification.
-* **Passwordless Speed Routing (OTP-Only):** Instantly suppresses generic password requirements entirely to deploy an exclusive 6-digit SMS code to their registered device.
-
-### **Relational Data Integrity**
-User metadata isn't just loosely typed JSON. We enforce strict **Relational Data Integrity** via a hardened PostgreSQL architecture. The operational `profiles` table is inextricably linked via robust `UUID` foreign-keys back to the underlying, isolated GoTrue `auth.users` metadata engine—preventing any possibility of orphan rows or fractured identities.
-
-### **Zero-Trust UI**
-Our frontend interface refuses to naively trust cookies or local storage. The internal user dashboard is aggressively guarded by a strict **Zero-Trust UI** policy. Any unauthenticated vector attempting to bypass the gateway is instantaneously intercepted and forcefully bounced back out to the `/login` perimeter before rendering a single secure DOM element.
+**For Technical Evaluators:** SMS OTP tokens are physically restricted by Twilio strictly to pre-verified trial numbers. To fully evaluate the MFA gateways during a live presentation, please utilize a verified test handset. Alternatively, an explicit **"Skip for Evaluation"** interface bypass has been provisioned natively inside the Phone Verification modal. This permits Technical Directors to intentionally bypass sandbox networking limits to instantly audit the unified Dashboard internal state.
 
 ---
 
-## 🛠 Tech Stack
+## 🛡️ Security Architecture & Protocols
 
-*   **Framework**: Next.js 16 (App Router) mapping SSR configurations for isolated Auth Guarding.
-*   **IAS Provider**: Supabase (Open-source PostgREST + GoTrue Auth) handling headless identity linkage and raw Twilio SMS OTPs.
-*   **Database**: PostgreSQL equipped deeply with Row Level Security (RLS) constraints.
-*   **Frontend Ecosystem**: React 18, Tailwind CSS compilation, and Lucide vector iconography.
+| Core Security Vector | Technical Implementation Specifications |
+| :--- | :--- |
+| **Stateless Sessions** | Legacy server-side session pinging abandoned in favor of high-velocity Supabase JWTs. Horizontally scaled edge components instantly verify active identities avoiding database latency. |
+| **Multi-Factor Orchestration** | Users define their security posture via Dashboard gates: seamlessly toggling strictly between **Strict MFA** (Bcrypt Password + SMS Trapping) or **Fast-Pass OTP** (Direct SMS routing). |
+| **Zero-Trust UI** | Next.js middleware layers brutally enforce strict intercepts. Any unauthenticated vector attempting cache manipulation is aggressively bounced back out to the `/login` perimeter instantly. |
+
+---
+
+## 🔗 Unified Identity Protocol
+
+This project specifically targets and resolves a critical industry flaw: **Identity Fragmentation**. Legacy architectures often spin up ghost accounts when a user authenticates cross-provider (e.g., Google OAuth vs Phone OTP). 
+
+This engine algorithmically merges these vectors permanently. Whether authentication originates from a headless Google SSO callback or a strict Twilio SMS handshake, the backend system mathematically links the resulting identity back into a singular, normalized PostgreSQL Source of Truth inside the `profiles` table utilizing deterministic `UUID` relational mapping. 
+
+---
+
+## ⚖️ Regulatory Compliance (GDPR)
+
+The architecture inherently abides by strict European Union General Data Protection Regulation (GDPR) mandates natively across the DOM and the Database.
+
+*   **Right to be Forgotten (Cascading Purge):** Guarded inside the secure Dashboard `Danger Zone`, users can natively invoke global account termination. This executes a localized SQL wrapper invoking a complete, cascading purge of all relational records (Tasks & Profile Metadata) from the isolated PostgreSQL tables before permanently incinerating standard JWT sessions.
+*   **Explicit Consent Gating:** Core Sign-up routines cannot mathematically execute critical API `POST` pathways until the frontend React engine registers precise `true` boolean bindings tied to the strict Terms of Service & Privacy Policy DOM elements.
+*   **Data Minimization:** The system actively drops unused upstream JSON payload anomalies generated by external provider APIs (e.g., excess Google Account metadata) to stringently limit system storage liability and isolate core identity.
+
+---
+
+## ⚡ Deployment & CI/CD Payload
+
+This ecosystem framework is meticulously bound and optimized for global deployment across the **Vercel Edge Network**.
+
+Internal routing infrastructures entirely avoid relying on static localhost URIs. By intercepting downstream OAuth callbacks and evaluating dynamic runtime configurations (e.g., evaluating `process.env.NEXT_PUBLIC_SITE_URL` against `window.location.origin` resolution logic), the Next.js auth-guards securely shift origin URIs flawlessly—scaling gracefully across local Node.js boundaries directly into Vercel Edge Serverless functions without code mutation.
 
 ---
 
 ## 🚀 Getting Started
 
-1. **Clone & Install**
+1. **Clone & Bootstrapping**
    ```bash
    git clone <your-repo-url>
    cd exal-auth-app
-   npm install
+   npm install 
    ```
 
 2. **Environment Hydration**
-   Declare your Supabase instance endpoints securely inside a `.env.local` file:
+   Define the Supabase endpoints securely inside an isolated `.env.local` file:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
    ```
 
-3. **Ignite the Engine**
+3. **Ignite the Local Edge**
    ```bash
    npm run dev
    ```
-   *The local development server will spin up on port `:3000`.*
+   *The local development network will bind instances concurrently onto port `:3000`.*

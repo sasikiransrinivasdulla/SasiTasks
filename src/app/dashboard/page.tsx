@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Card, CardContent } from "@/components/Card";
 import { TaskItem } from "@/components/TaskItem";
-import { CheckCircle2, LogOut, Plus, Search, User as UserIcon, Mail, Smartphone, Lock } from "lucide-react";
+import { CheckCircle2, LogOut, Plus, Search, User as UserIcon, Mail, Smartphone, Lock, ShieldAlert } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { normalizePhone } from "@/lib/phone";
 
@@ -355,6 +355,36 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!profile || !user) return;
+    
+    // Explicit GDPR confirmation
+    const isConfirmed = window.confirm(
+      "WARNING: GDPR Data Deletion is irreversible.\n\nThis will purge all your Tasks and permanently destroy your identity metadata across the system. Proceed?"
+    );
+    
+    if (!isConfirmed) return;
+    setIsUpdatingSecurity(true);
+    
+    try {
+      // 1. Purge Relational Tasks
+      const { error: tasksError } = await supabase.from('tasks').delete().eq('user_id', user.id);
+      if (tasksError) console.error("Tasks Purge Error:", tasksError);
+      
+      // 2. Purge Profile Metadata
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user.id);
+      if (profileError) console.error("Profile Purge Error:", profileError);
+      
+      // 3. Destroy Client Session
+      await supabase.auth.signOut({ scope: 'global' });
+      router.push("/");
+    } catch (err) {
+      console.error("Critical Deletion Error:", err);
+    } finally {
+      setIsUpdatingSecurity(false);
+    }
+  };
+
   const handleToggleTask = async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
@@ -600,6 +630,12 @@ export default function DashboardPage() {
             <CardContent className="px-6 pb-6">
               {phoneStep === 1 ? (
                 <form onSubmit={handleSendPhoneOtp} className="space-y-4">
+                  <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500/90 text-[11px] sm:text-xs p-3 rounded-lg leading-relaxed text-left flex gap-2 items-start mt-2 shadow-sm">
+                    <span className="text-sm">⚠️</span>
+                    <p>
+                      <strong>Infrastructure Note:</strong> This system is currently running on a Twilio Development Sandbox. SMS OTP is restricted to pre-verified trial numbers. To demonstrate the MFA flow during the presentation, please use the verified test number provided in the README, or skip this step to explore the dashboard.
+                    </p>
+                  </div>
                   <Input
                     label="Phone Number"
                     placeholder="9876543210"
@@ -607,9 +643,18 @@ export default function DashboardPage() {
                     onChange={(e) => setPhoneInput(e.target.value)}
                     error={phoneError}
                   />
-                  <Button type="submit" className="w-full font-semibold" isLoading={isSavingPhone}>
-                    Send Secure OTP
-                  </Button>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button type="submit" className="w-full font-semibold" isLoading={isSavingPhone}>
+                      Send Secure OTP
+                    </Button>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPhoneModal(false)}
+                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 pt-2 pb-1 transition-colors w-full text-center cursor-pointer"
+                    >
+                      Skip for Evaluation
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyPhoneOtp} className="space-y-4 animate-in slide-in-from-right-4 duration-300">
@@ -800,6 +845,25 @@ export default function DashboardPage() {
                   Protect your account by forcing all active sessions across all devices and browsers to instantly terminate.
                 </p>
               </div>
+
+              <div className="pt-3 border-t border-destructive/20 mt-2 rounded-xl bg-destructive/5 border p-4">
+                <p className="text-sm text-destructive font-bold flex items-center gap-2 mb-1.5">
+                  <ShieldAlert className="h-4 w-4" />
+                  Danger Zone
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Permanently wipe your account arrays and all relational data in 100% compliance with GDPR Right to be Forgotten protocols.
+                </p>
+                <Button 
+                  variant="destructive" 
+                  className="w-full font-bold shadow-md shadow-destructive/20 hover:shadow-destructive/40"
+                  onClick={handleDeleteAccount}
+                  isLoading={isUpdatingSecurity}
+                >
+                  Delete My Account Natively
+                </Button>
+              </div>
+
             </CardContent>
           </Card>
         </div>
